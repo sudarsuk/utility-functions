@@ -32,6 +32,8 @@ def seperate_last_element(image_path):
     for i in rects:
         if i[0] > max_num:
             max_num = i[0]
+            
+    print("end nemelt text orloo")
 
     super_script = None
     word_start_point = None
