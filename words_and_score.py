@@ -28,9 +28,6 @@ def seperate_last_element(image_path):
 
     # find max value in rects -> find last point element in image
     # max_num = np.amax(rects)
-
-    # print(rects, '   rects')
-
     max_num = 0
     for i in rects:
         if i[0] > max_num:
