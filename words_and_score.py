@@ -33,8 +33,6 @@ def seperate_last_element(image_path):
         if i[0] > max_num:
             max_num = i[0]
 
-    # print(max_num, '    max_num')
-
     super_script = None
     word_start_point = None
     word_end_point = None
