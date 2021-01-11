@@ -258,6 +258,7 @@ def admin_product_edit(pro_id):
         product.amount = int(x.request.form.get("amount"))
         product.save()
         return x.redirect("/admin/product")
+        print("Here")
     # endfold
     return x.render_template("edit_product.html", **locals())
     
