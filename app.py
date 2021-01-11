@@ -259,6 +259,7 @@ def admin_product_edit(pro_id):
         product.save()
         return x.redirect("/admin/product")
         print("Here")
+        print("test shuu")
     # endfold
     return x.render_template("edit_product.html", **locals())
     
