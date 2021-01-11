@@ -227,6 +227,64 @@ def admin_archive():
     return x.render_template("admin/admin-archive.html", **locals())
 
 
+@app.route("/admin/product")
+def admin_product():
+    product_list = db.Product.select()
+    return x.render_template("product.html", **locals())
+
+
+@app.route("/admin/product/new", methods=["GET", "POST"])
+def admin_product_new():
+    # POST create product
+    if x.request.method == "POST":
+        p = db.Product()
+        p.title = x.request.form.get("title")
+        p.price = int(x.request.form.get("price"))
+        p.image_url = x.request.form.get("image_url")
+        p.save()
+        return x.redirect("/admin/product")
+    # endfold
+    return x.render_template("new_product.html", **locals())
+
+
+@app.route("/admin/product_edit/<int:pro_id>", methods=["GET", "POST"])
+def admin_product_edit(pro_id):
+    product = db.Product.get_by_id(pro_id)
+    # POST edit product
+    if x.request.method == "POST":
+        product.title = x.request.form.get("title")
+        product.price = int(x.request.form.get("price"))
+        product.image_url = x.request.form.get("image_url")
+        product.amount = int(x.request.form.get("amount"))
+        product.save()
+        return x.redirect("/admin/product")
+    # endfold
+    return x.render_template("edit_product.html", **locals())
+    
+
+# reset
+@app.route("/reset")
+def reset():
+    res = "<pre>"
+    global product_list
+    cur = db.postgres_db.cursor()
+    cur.execute("SELECT TABLENAME FROM pg_tables where schemaname='public';")
+    for t in cur.fetchall():
+        # res += "%s\n" % repr(d)
+        cur.execute('DROP TABLE "%s";' % t)
+    db.postgres_db.commit()
+    # Create tables
+    db.postgres_db.create_tables([db.Product])
+    for i in product_list:
+        try:
+            i.pop("code")
+        except KeyError:
+            continue
+    db.Product.insert_many(product_list).execute()
+    res += "[+] Create model: Product: (%s)\n" % db.Product.select().count()
+    return res
+
+    
 # manager
 @app.route("/manager", methods=["GET", "POST"])
 def manager():
