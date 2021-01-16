@@ -1,7 +1,8 @@
+import copy
+import datetime
 import json
 import logging
 import time
-import yaml
 
 import flask as x
 
@@ -54,7 +55,9 @@ def context_processor():
 # main
 @app.route("/", methods=["GET", "POST"])
 def index():
-    global product_list
+    product_list = db.Product.select()\
+        .where(db.Product.status == db.Product.ACTIVE)\
+        .order_by(db.Product.id)
 
     if "new" in x.request.args:
         x.session.pop("order_id", "")
@@ -82,7 +85,7 @@ def index():
         x.session["order_id"] = order.id
         return x.redirect("/confirm")
 
-    return x.render_template("index.html", product_list=product_list, **locals())
+    return x.render_template("index.html", **locals())
 
 
 @app.route("/confirm", methods=["GET", "POST"])
@@ -229,62 +232,76 @@ def admin_archive():
 
 @app.route("/admin/product")
 def admin_product():
-    product_list = db.Product.select()
-    return x.render_template("product.html", **locals())
+    product_list = db.Product.select()\
+        .where(db.Product.status == db.Product.ACTIVE)\
+        .order_by(db.Product.id)
+
+    draft_list = db.Product.select()\
+        .where(db.Product.status == db.Product.DRAFT)
+
+    return x.render_template("admin/product-list.html", **locals())
 
 
-@app.route("/admin/product/new", methods=["GET", "POST"])
+@app.route("/admin/product/new")
 def admin_product_new():
-    # POST create product
-    if x.request.method == "POST":
-        p = db.Product()
-        p.title = x.request.form.get("title")
-        p.price = int(x.request.form.get("price"))
-        p.image_url = x.request.form.get("image_url")
-        p.save()
-        return x.redirect("/admin/product")
-    # endfold
-    return x.render_template("new_product.html", **locals())
+    p = db.Product()
+    p.title = "Untitled"
+    p.price = 10000
+    p.image_url = ""
+    p.status = db.Product.DRAFT
+    p.save()
+
+    return x.redirect("/admin/product/%s" % p.id)
 
 
-@app.route("/admin/product_edit/<int:pro_id>", methods=["GET", "POST"])
-def admin_product_edit(pro_id):
-    product = db.Product.get_by_id(pro_id)
-    # POST edit product
+@app.route("/admin/product/<int:id_>", methods=["GET", "POST"])
+def admin_product_edit(id_):
+    product = db.Product.get_by_id(id)
+
+    # POST
     if x.request.method == "POST":
+        product.status = db.Product.ACTIVE if x.request.form.get("status") else db.Product.DRAFT
         product.title = x.request.form.get("title")
-        product.price = int(x.request.form.get("price"))
+        product.price = x.request.form.get("price")
         product.image_url = x.request.form.get("image_url")
-        product.amount = int(x.request.form.get("amount"))
+        product.amount = x.request.form.get("amount")
         product.save()
+
+        x.flash("Амжилттай хадгалагдлаа")
         return x.redirect("/admin/product")
     # endfold
-    return x.render_template("edit_product.html", **locals())
-    
+
+    return x.render_template("/admin/product-edit.html", **locals())
+
 
 # reset
 @app.route("/reset")
 def reset():
-    res = "<pre>"
     global product_list
+
+    if x.request.host != "localhost:5000":
+        return x.abort(404)
+
+    res = "<pre>"
     cur = db.postgres_db.cursor()
     cur.execute("SELECT TABLENAME FROM pg_tables where schemaname='public';")
     for t in cur.fetchall():
-        # res += "%s\n" % repr(d)
         cur.execute('DROP TABLE "%s";' % t)
     db.postgres_db.commit()
+
     # Create tables
-    db.postgres_db.create_tables([db.Product])
-    for i in product_list:
-        try:
-            i.pop("code")
-        except KeyError:
-            continue
-    db.Product.insert_many(product_list).execute()
+    db.postgres_db.create_tables([db.Order, db.Product])
+    product_list_copy = copy.deepcopy(product_list)
+    for i, p in enumerate(product_list_copy):
+        p.pop("code")
+        product_list_copy[i]["status"] = 1
+    db.Product.insert_many(product_list_copy).execute()
+    # endfold
+
     res += "[+] Create model: Product: (%s)\n" % db.Product.select().count()
     return res
 
-    
+
 # manager
 @app.route("/manager", methods=["GET", "POST"])
 def manager():
@@ -315,11 +332,17 @@ def manager():
 
         data = []
         for o in paid_order_list:
-            data.append([o.name, o.phone, o.address])
+            data.append({
+                "name": o.name,
+                "phone": o.phone,
+                "address": o.address,
+                "total": fn.order_total(json.loads(o.data_json)),
+            })
 
+        today = datetime.datetime.now().strftime("%Y-%m-%d")
         headers = {
             "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "Content-Disposition": "attachment; filename=order-tagtaa.xlsx",
+            "Content-Disposition": "attachment; filename=%s--%s.xlsx" % (fn.config["site"], today),
         }
 
         return x.make_response(fn.get_xlsx(data), 200, headers)
@@ -365,12 +388,12 @@ def manager():
 # static
 @app.route("/favicon.ico")
 def favicon_ico():
-    return x.send_file("%s/static/favicon/favicon.ico" % app.root_path)
+    return x.send_file("%s/site--%s/static/favicon/favicon.ico" % (app.root_path, fn.config["site"]))
 
 
 @app.route("/favicon.png")
 def favicon_png():
-    return x.send_file("%s/static/favicon/favicon.png" % app.root_path)
+    return x.send_file("%s/site--%s/static/favicon/favicon.png" % (app.root_path, fn.config["site"]))
 
 
 @app.route("/robots.txt")
